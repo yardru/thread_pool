@@ -37,8 +37,8 @@ private:
 
    void AddFreeThread(THREAD & thread);
 
-   std::queue<PACKAGED_TASK> packagedTasks;
    std::vector<std::unique_ptr<THREAD>> threads;
+   std::queue<PACKAGED_TASK> packagedTasks;
    std::queue<THREAD *> freeThreads;
    std::mutex mutex;
 };
