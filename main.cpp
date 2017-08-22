@@ -1,4 +1,5 @@
 #include <gtest\gtest.h>
+//#include <vld.h> // memory leaks control
 
 
 int main(int argc, char ** argv)

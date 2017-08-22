@@ -1,82 +1,74 @@
+#include <assert.h>
 #include "thread_pool.h"
 
 
-ds::THREAD_POOL::THREAD_POOL(COUNT threadsNumber)
+ds::THREAD_POOL::THREAD_POOL(COUNT threadsNumber) : isClose(false)
 {
+   assert(threadsNumber > 0);
    for (COUNT i = 0; i < threadsNumber; i++) {
-      THREAD * pThread = new THREAD(*this);
-      threads.push_back(std::unique_ptr<THREAD>(pThread));
-      freeThreads.push(pThread);
+      threads.emplace_back(*this);
    }
 }
 
 
-std::future<int> ds::THREAD_POOL::AddTask(const TASK & task)
+ds::THREAD_POOL::~THREAD_POOL()
 {
-   PACKAGED_TASK packagedTask(task);
-   auto future = packagedTask.get_future();
-
-   std::unique_lock<std::mutex> lock(mutex);
-   if (!freeThreads.empty()) {
-      freeThreads.front()->SetTask(std::move(packagedTask));
-      freeThreads.pop();
-   } else {
-      packagedTasks.push(std::move(packagedTask));
-   }
-
-   return future;
+   std::unique_lock<std::mutex> lock(cvMutex);
+   isClose = true;
+   isUpdated.notify_all();
 }
 
 
-void ds::THREAD_POOL::AddFreeThread(THREAD & thread)
+bool ds::THREAD_POOL::IsClose() const
 {
-   std::unique_lock<std::mutex> lock(mutex);
-   if (!packagedTasks.empty()) {
-      thread.SetTask(std::move(packagedTasks.front()));
-      packagedTasks.pop();
+   return isClose;
+}
+
+
+ds::THREAD_POOL::PTASK ds::THREAD_POOL::GetTask()
+{
+   std::unique_lock<std::mutex> lock(queueMutex);
+   PTASK task;
+   if (!tasks.empty()) {
+      task = std::move(tasks.front());
+      tasks.pop();
    }
-   else {
-      freeThreads.push(&thread);
-   }
+   return task;
+}
+
+
+std::mutex & ds::THREAD_POOL::GetMutex()
+{
+   return cvMutex;
 }
 
 
 ds::THREAD_POOL::THREAD::THREAD(THREAD_POOL & pool) : pool(pool),
-   stdThread(ThreadFunc, std::ref(*this)), isClose(false)
+   end(std::async(std::launch::async, [this]() { Run(); }))
 {
 }
 
 
-ds::THREAD_POOL::THREAD::~THREAD(void)
+ds::THREAD_POOL::THREAD::~THREAD()
 {
-   isClose = true;
-   isTaskUpdated.notify_all();
-   if (stdThread.joinable()) {
-      stdThread.join();
-   }
+   end.get();
 }
 
 
-void ds::THREAD_POOL::THREAD::SetTask(PACKAGED_TASK && packagedTask)
+void ds::THREAD_POOL::THREAD::Run()
 {
-   std::unique_lock<std::mutex> lock(mutex);
-   task = std::move(packagedTask);
-   isTaskUpdated.notify_all();
-}
-
-
-void ds::THREAD_POOL::THREAD::ThreadFunc(THREAD & thread)
-{
-   std::mutex utilMutex;
-   while (!thread.isClose) {
-      std::unique_lock<std::mutex> lock(utilMutex);
-      thread.isTaskUpdated.wait(lock, [&task = thread.task, &isClose = thread.isClose]() {
-         return task.valid() || isClose;
-      });
-      if (thread.task.valid()) {
-         thread.task();
-         thread.SetTask(PACKAGED_TASK());
-         thread.pool.AddFreeThread(thread);
+   PTASK task;
+   while (!pool.IsClose()) {
+      if (!(task = pool.GetTask())) {
+         std::unique_lock<std::mutex> lock(pool.GetMutex());
+         if (pool.IsClose()) {
+            break;
+         }
+         if (!(task = pool.GetTask())) {
+            pool.isUpdated.wait(lock);
+            continue;
+         }
       }
+      task->Call();
    }
 }
