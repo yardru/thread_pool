@@ -29,12 +29,6 @@ private:
    };
    using PTASK = std::unique_ptr<TASK>;
 
-   // Only because of errors with std::function<RET &(void)>
-   template <typename RET, typename FUNC, typename... ARGS>
-   class REAL_TASK_BASE;
-   template <typename RET, typename FUNC, typename... ARGS>
-   class REAL_TASK;
-
    class THREAD {
    public:
       explicit THREAD(THREAD_POOL & pool);
@@ -50,14 +44,8 @@ private:
    PTASK GetTask();
    std::mutex & GetMutex();
 
-   // See std::apply from c++17
-   // Implementation here because of error C3779
    template <typename FUNC, typename... ARGS, std::size_t... I>
-   static constexpr decltype(auto) ApplyFunc(FUNC && func, std::tuple<ARGS...> & args, std::index_sequence<I...>)
-   {
-      //return std::forward<FUNC>(func)(std::get<I>(std::forward<TUPLE>(args))...);
-      return std::forward<FUNC>(func)(std::forward<ARGS>(std::get<I>(args))...);
-   }
+   static constexpr decltype(auto) ApplyFunc(FUNC && func, std::tuple<ARGS...> & args, std::index_sequence<I...>);
 
    bool isClose;
    std::mutex cvMutex;
