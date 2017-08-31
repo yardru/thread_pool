@@ -18,41 +18,19 @@ public:
    ~THREAD_POOL();
 
    // Return std::future<RET> object, where RET - func return type
-   template <typename FUNC, typename... ARGS>
-   auto AddTask(FUNC && func, ARGS &&... args);
+   template <typename FUNC>
+   auto AddTask(FUNC && func);
 
 private:
-   class TASK {
-   public:
-      virtual void Call() = 0;
-      virtual ~TASK() = default;
-   };
-   using PTASK = std::unique_ptr<TASK>;
+   using TASK = std::function<void(void)>;
 
-   class THREAD {
-   public:
-      explicit THREAD(THREAD_POOL & pool);
-      ~THREAD();
-   private:
-      void Run(void);
-
-      THREAD_POOL & pool;
-      std::future<void> end;
-   };
-
-   bool IsClose() const;
-   PTASK GetTask();
-   std::mutex & GetMutex();
-
-   template <typename FUNC, typename... ARGS, std::size_t... I>
-   static constexpr decltype(auto) ApplyFunc(FUNC && func, std::tuple<ARGS...> & args, std::index_sequence<I...>);
+   void ThreadLoop(void);
 
    bool isClose;
-   std::mutex cvMutex;
-   std::mutex queueMutex;
+   std::mutex mutex;
    std::condition_variable isUpdated;
-   std::queue<PTASK> tasks;
-   std::list<THREAD> threads;
+   std::queue<TASK> tasks;
+   std::list<std::thread> threads;
 };
 
 } // namespace ds

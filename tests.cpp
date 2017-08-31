@@ -43,22 +43,6 @@ TEST(GeneralTest, Base)
 }
 
 
-TEST(GeneralTest, DiffFuncs)
-{
-   dsTHREAD_POOL pool(10);
-   int k = 1;
-   auto f1 = pool.AddTask([]() { return 1; });
-   auto f2 = pool.AddTask([](const auto & a, const auto & b) { return a == b; }, 2.5, 2.4);
-   auto f3 = pool.AddTask([&k](int a) { k *= a; }, 7);
-   int r1 = f1.get();
-   bool r2 = f2.get();
-   f3.get();
-   ASSERT_EQ(r1, 1);
-   ASSERT_EQ(r2, false);
-   ASSERT_EQ(k, 7);
-}
-
-
 TEST(GeneralTest, DoubleMain)
 {
    dsTHREAD_POOL pool(10);
@@ -110,79 +94,4 @@ TEST(SlowFuncTest, Asked)
 {
    dsTHREAD_POOL pool(1);
    pool.AddTask([]() { this_thread::sleep_for(1s); }).get();
-}
-
-
-TEST(RefArgsTest, RValueArgs)
-{
-   dsTHREAD_POOL pool(1);
-   std::future<void> f;
-   std::vector<int> v;
-
-   {
-      class FUNC {
-      public:
-         FUNC(std::vector<int> & v) : v(v) {}
-         void operator()(std::vector<int> && v)
-         {
-            this->v = std::move(v);
-         }
-      private:
-         std::vector<int> & v;
-      } func(v);
-      f = pool.AddTask(func, std::vector<int>{1, 2, 3});
-   }
-
-   f.get();
-   ASSERT_EQ(v[0] + v[1] + v[2], 6);
-}
-
-
-struct NONCOPYABLE {
-public:
-   explicit NONCOPYABLE(int val) : val(val) {}
-   NONCOPYABLE(const NONCOPYABLE & rhs) = delete;
-   NONCOPYABLE(NONCOPYABLE && rhs) = delete;
-   NONCOPYABLE & operator=(const NONCOPYABLE & rhs) = delete;
-   NONCOPYABLE & operator=(NONCOPYABLE && rhs) = delete;
-   int & GetIncVal() { return ++val; }
-private:
-   int val;
-};
-
-
-TEST(RefArgsTest, LValueArgsRValueRet)
-{
-   NONCOPYABLE ncp(0);
-
-   {
-      dsTHREAD_POOL pool(1);
-      class FUNC {
-      public:
-         int operator()(NONCOPYABLE & ncp) { return ncp.GetIncVal(); }
-      } func;
-      auto f = pool.AddTask(func, ncp);
-      decltype(auto) b = f.get();
-      b++;
-   }
-   ASSERT_EQ(ncp.GetIncVal(), 2);
-}
-
-
-TEST(RefArgsTest, LValueArgsLValueRet)
-{
-   NONCOPYABLE ncp(0);
-
-   {
-      dsTHREAD_POOL pool(1);
-      class FUNC {
-      public:
-         NONCOPYABLE & operator()(NONCOPYABLE & ncp) { return ncp; }
-      } func;
-      auto f = pool.AddTask(func, ncp);
-      decltype(auto) b = f.get().GetIncVal();
-      b++;
-   }
-
-   ASSERT_EQ(ncp.GetIncVal(), 3);
 }
