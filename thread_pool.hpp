@@ -8,7 +8,7 @@ auto ds::THREAD_POOL::AddTask(FUNC && func)
    using RET = decltype(std::forward<FUNC>(func)());
    using PACKAGED_TASK = std::packaged_task<RET(void)>;
 
-   PACKAGED_TASK packaged_task(func);
+   PACKAGED_TASK packaged_task(std::forward<FUNC>(func));
    std::future<RET> future = packaged_task.get_future();
 
    // because std::function doesn't work with noncopyable functors

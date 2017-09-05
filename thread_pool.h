@@ -30,7 +30,7 @@ private:
    std::mutex mutex;
    std::condition_variable isUpdated;
    std::queue<TASK> tasks;
-   std::list<std::thread> threads;
+   std::vector<std::thread> threads;
 };
 
 } // namespace ds
